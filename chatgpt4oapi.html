@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenRouter Chatbot</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-white h-screen flex flex-col">
+
+  <!-- Header -->
+  <div class="bg-gray-900 p-4 text-center text-lg font-semibold shadow">
+    🤖 AI Chatbot (OpenRouter)
+  </div>
+
+  <!-- Chat Area -->
+  <div id="chat" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+  <!-- Input -->
+  <div class="bg-gray-900 p-4 flex gap-2">
+    <input 
+      id="userInput"
+      type="text"
+      placeholder="Nhập tin nhắn..."
+      class="flex-1 bg-gray-800 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+    />
+    <button 
+      onclick="sendMessage()"
+      class="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-xl font-semibold transition"
+    >
+      Gửi
+    </button>
+  </div>
+
+<script>
+const API_KEY = "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";
+const MODEL = "openai/gpt-4o-mini";
+
+let messages = JSON.parse(localStorage.getItem("chatHistory")) || [
+  { role: "system", content: "Bạn là một trợ lý AI thân thiện." }
+];
+
+const chatDiv = document.getElementById("chat");
+const input = document.getElementById("userInput");
+
+// Load lịch sử
+renderHistory();
+
+input.addEventListener("keypress", function(e) {
+  if (e.key === "Enter") {
+    sendMessage();
+  }
+});
+
+function renderHistory() {
+  chatDiv.innerHTML = "";
+  messages.forEach(msg => {
+    if (msg.role !== "system") {
+      addMessageToUI(msg.content, msg.role);
+    }
+  });
+}
+
+function addMessageToUI(text, role) {
+  const wrapper = document.createElement("div");
+  wrapper.className = `flex ${role === "user" ? "justify-end" : "justify-start"}`;
+
+  const bubble = document.createElement("div");
+  bubble.className = `
+    max-w-xl px-4 py-2 rounded-2xl text-sm whitespace-pre-wrap
+    ${role === "user" 
+      ? "bg-blue-600 text-white rounded-br-none" 
+      : "bg-gray-800 text-gray-200 rounded-bl-none"}
+  `;
+  bubble.textContent = text;
+
+  wrapper.appendChild(bubble);
+  chatDiv.appendChild(wrapper);
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+
+  const userMsg = { role: "user", content: text };
+  messages.push(userMsg);
+  addMessageToUI(text, "user");
+  saveHistory();
+
+  // Loading bubble
+  const loadingWrapper = document.createElement("div");
+  loadingWrapper.className = "flex justify-start";
+  loadingWrapper.innerHTML = `
+    <div class="bg-gray-800 px-4 py-2 rounded-2xl rounded-bl-none text-gray-400 text-sm">
+      Đang suy nghĩ...
+    </div>
+  `;
+  chatDiv.appendChild(loadingWrapper);
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + API_KEY,
+        "Content-Type": "application/json",
+        "HTTP-Referer": window.location.href,
+        "X-Title": "Tailwind Chatbot"
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: messages
+      })
+    });
+
+    const data = await res.json();
+    const reply = data.choices[0].message.content;
+
+    messages.push({ role: "assistant", content: reply });
+    saveHistory();
+
+    chatDiv.removeChild(loadingWrapper);
+    addMessageToUI(reply, "assistant");
+
+  } catch (err) {
+    chatDiv.removeChild(loadingWrapper);
+    addMessageToUI("Lỗi kết nối API!", "assistant");
+    console.error(err);
+  }
+}
+
+function saveHistory() {
+  localStorage.setItem("chatHistory", JSON.stringify(messages));
+}
+</script>
+
+</body>
+</html>
